@@ -23,3 +23,6 @@ dist/
 
 # Scratch workspace for scheduled-run discovery/enrichment (never committed)
 tmp/
+
+# Per-run output of test-all-sources/test-all-sources.sh
+test-all-sources/results/
