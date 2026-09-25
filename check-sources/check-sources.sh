@@ -422,7 +422,7 @@ for SOURCE in "${SOURCES[@]}"; do
     DISPLAY_REASON="${DISPLAY_REASON:0:67}..."
   fi
 
-  printf "%-28s %-14s %-8s %s\n" \
+  printf "%-28s %-14s %-8s %s\n\n" \
     "$SOURCE" "$STATUS" "$COUNT" "$DISPLAY_REASON"
 
   printf "%-28s %-14s %-8s %s\n" \
