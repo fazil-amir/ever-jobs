@@ -23,8 +23,8 @@ set -u
 #   - jq
 #
 # Usage (from anywhere):
-#   chmod +x test-all-sources/test-all-sources.sh
-#   ./test-all-sources/test-all-sources.sh
+#   chmod +x check-sources/check-sources.sh
+#   ./check-sources/check-sources.sh
 #
 # Optional:
 #   API=http://localhost:3001/api/jobs/search
@@ -34,7 +34,7 @@ set -u
 #   OUT_DIR=/some/other/dir   (default: results/ next to this script)
 #
 # Example:
-#   QUERY="senior frontend engineer" RESULTS=10 ./test-all-sources/test-all-sources.sh
+#   QUERY="senior frontend engineer" RESULTS=10 ./check-sources/check-sources.sh
 # ============================================================
 
 API="${API:-http://localhost:3001/api/jobs/search}"
