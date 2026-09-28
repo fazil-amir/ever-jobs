@@ -6,6 +6,8 @@ import { classifyScrapeError,
   ScraperInputDto,
   JobResponseDto,
   JobPostDto,
+  OfficeDto,
+  LocationDto,
   CompensationDto,
   CompensationInterval,
   Site,
@@ -17,10 +19,17 @@ import {
   decodeHtmlEntities,
   extractEmails,
   parseLocationList,
+  parseLocationText,
   resolveCompensation,
   toDateOnly,
 } from '@ever-jobs/common';
-import { GREENHOUSE_API_URL, GREENHOUSE_HARVEST_API_URL, GREENHOUSE_HEADERS } from './greenhouse.constants';
+import {
+  GREENHOUSE_API_KEY_ENV_VAR,
+  GREENHOUSE_API_URL,
+  GREENHOUSE_HARVEST_API_URL,
+  GREENHOUSE_HARVEST_BOARD_ENV_VAR,
+  GREENHOUSE_HEADERS,
+} from './greenhouse.constants';
 import {
   GreenhouseJob,
   GreenhouseResponse,
@@ -44,6 +53,8 @@ const ENCODED_TAG_RE = new RegExp(`&lt;(?:${BLOCK_TAGS})\\b`, 'i');
 @Injectable()
 export class GreenhouseService implements IScraper {
   private readonly logger = new Logger(GreenhouseService.name);
+  /** The unscoped-env-key warning is logged once per adapter instance. */
+  private warnedUnscopedEnvKey = false;
 
   async scrape(input: ScraperInputDto): Promise<JobResponseDto> {
     const companySlug = input.companySlug;
@@ -53,7 +64,7 @@ export class GreenhouseService implements IScraper {
     }
 
     // ── Authenticated Harvest API path ──────────────────────────────
-    const apiKey = input.auth?.greenhouse?.apiKey ?? process.env.GREENHOUSE_API_KEY;
+    const apiKey = this.harvestKeyFor(input, companySlug);
     if (apiKey) {
       try {
         return await this.scrapeWithApi(apiKey, input, companySlug);
@@ -152,6 +163,10 @@ export class GreenhouseService implements IScraper {
       companyName: job.company_name ?? companySlug,
       jobUrl: job.absolute_url ?? `https://boards.greenhouse.io/${companySlug}/jobs/${job.id}`,
       location: parsedLocations.location,
+      ...(parsedLocations.locations.length > 0
+        ? { locations: parsedLocations.locations }
+        : {}),
+      offices: this.officeDtos(job.offices),
       description,
       compensation,
       datePosted: toDateOnly(datePosted),
@@ -288,6 +303,41 @@ export class GreenhouseService implements IScraper {
   // ─── Harvest API (authenticated) ───────────────────────────────────
 
   /**
+   * The Harvest key for this scrape, or `undefined` for the public board
+   * (Spec 1735 §4.5).
+   *
+   * Harvest `/v1/jobs` lists the key OWNER's jobs — confidential ones included
+   * — whatever `companySlug` says. Company plugins delegate here with their own
+   * board in the default fan-out, so an unscoped env key made every one of them
+   * return the operator's jobs under another firm's name. Therefore:
+   * - a per-request `auth.greenhouse.apiKey` is the caller's explicit choice for
+   *   its own `companySlug` and is honoured as before;
+   * - the env key is used only when {@link GREENHOUSE_HARVEST_BOARD_ENV_VAR}
+   *   names the requested board (case-insensitive); otherwise the public board
+   *   is read and one warning is logged (the key itself is never logged).
+   */
+  private harvestKeyFor(input: ScraperInputDto, companySlug: string): string | undefined {
+    const requestKey = input.auth?.greenhouse?.apiKey;
+    if (requestKey) return requestKey;
+
+    const envKey = process.env[GREENHOUSE_API_KEY_ENV_VAR];
+    if (!envKey) return undefined;
+
+    const board = process.env[GREENHOUSE_HARVEST_BOARD_ENV_VAR]?.trim().toLowerCase();
+    if (board && board === companySlug.trim().toLowerCase()) return envKey;
+
+    if (!this.warnedUnscopedEnvKey) {
+      this.warnedUnscopedEnvKey = true;
+      this.logger.warn(
+        `${GREENHOUSE_API_KEY_ENV_VAR} is set but ${GREENHOUSE_HARVEST_BOARD_ENV_VAR} does not name ` +
+          `board '${companySlug}'; reading the public board. Harvest returns the key owner's jobs for any ` +
+          `board, so set ${GREENHOUSE_HARVEST_BOARD_ENV_VAR} to your own board token to use it there.`,
+      );
+    }
+    return undefined;
+  }
+
+  /**
    * Scrape jobs using the official Greenhouse Harvest API.
    *
    * The Harvest API returns richer data than the public board API:
@@ -386,6 +436,7 @@ export class GreenhouseService implements IScraper {
     const parsedLocations = parseLocationList(
       this.locationLabels(office?.name ?? office?.location?.name ?? null),
     );
+    const locations = parsedLocations.locations;
 
     // Greenhouse has no structured remote flag; the Harvest `offices[]` are the
     // only structured remote evidence here. Fold them into the isRemote OR
@@ -404,6 +455,8 @@ export class GreenhouseService implements IScraper {
       companyName: companySlug,
       jobUrl: `https://boards.greenhouse.io/${companySlug}/jobs/${job.id}`,
       location: parsedLocations.location,
+      ...(locations.length > 0 ? { locations } : {}),
+      offices: this.officeDtos(job.offices),
       description,
       compensation: resolveCompensation({
         text: this.salaryTextFromContent(job.notes),
@@ -446,6 +499,148 @@ export class GreenhouseService implements IScraper {
       labels.push(...this.locationLabels(locName));
     }
     return labels;
+  }
+
+  /**
+   * Map `offices[]` entries to `OfficeDto`s (Spec 5122). `name` holds the
+   * office label verbatim, `text` the raw `office.location` string when the
+   * wire carries one (so `name`/`text` keep their provenance), and geography
+   * comes from `office.location` first, then the geographic tail of
+   * `office.name`. Offices are a company catalog — they never mint or merge
+   * into `locations[]` entries.
+   */
+  private officeDtos(
+    offices:
+      | Array<{
+          id?: number | null;
+          name?: string | null;
+          location?: string | { name?: string | null } | null;
+        }>
+      | null
+      | undefined,
+  ): OfficeDto[] {
+    const sites: OfficeDto[] = [];
+    const seen = new Set<string>();
+    for (const office of offices ?? []) {
+      const dto = this.officeDto(office);
+      if (!dto) continue;
+      const key = (dto.id ?? `${dto.name}|${dto.text}`).toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      sites.push(dto);
+    }
+    return sites;
+  }
+
+  private officeDto(office: {
+    id?: number | null;
+    name?: string | null;
+    location?: string | { name?: string | null } | null;
+  }): OfficeDto | null {
+    const name = office.name?.replace(/\s+/g, ' ').trim() || null;
+    const loc = office.location;
+    const rawLoc = typeof loc === 'string' ? loc : (loc?.name ?? null);
+    const locName = rawLoc?.replace(/\s+/g, ' ').trim() || null;
+    if (!name && !locName) return null;
+
+    const address = this.officeParenAddress(name);
+    let geo: Partial<OfficeDto> = {};
+    if (locName) {
+      const parsed = parseLocationList(this.locationLabels(locName)).location;
+      if (parsed) {
+        geo = {
+          city: parsed.city ?? null,
+          state: parsed.state ?? null,
+          country:
+            typeof parsed.country === 'string' ? parsed.country : null,
+        };
+      }
+    } else {
+      geo = this.officeGeoFromName(name);
+    }
+    return new OfficeDto({
+      id: office.id != null ? String(office.id) : null,
+      name,
+      text: locName,
+      city: geo.city ?? address.city,
+      state: geo.state ?? address.state,
+      country: geo.country ?? null,
+      streetAddress: address.streetAddress,
+      postalCode: address.postalCode,
+    });
+  }
+
+  /**
+   * Parenthesized address inside an office name, e.g.
+   * `"Alameda HQ (707 West Tower Avenue, Suite A, Alameda, CA 94501)"` or
+   * `"HQ (190 Tasman)"`. A `street, city, ST zip` tail is unpacked into
+   * fields; anything else containing a digit is kept verbatim in
+   * `streetAddress`.
+   */
+  private officeParenAddress(name: string | null): {
+    streetAddress: string | null;
+    postalCode: string | null;
+    city: string | null;
+    state: string | null;
+  } {
+    const empty = {
+      streetAddress: null,
+      postalCode: null,
+      city: null,
+      state: null,
+    };
+    if (!name) return empty;
+    const groups = name.match(/\(([^()]*)\)/g);
+    const inner = groups?.pop()?.slice(1, -1).trim();
+    if (!inner || !/\d/.test(inner)) return empty;
+    const full = inner.match(
+      /^(.*?),\s*([^,]+),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/,
+    );
+    if (full) {
+      return {
+        streetAddress: full[1].trim(),
+        postalCode: full[4],
+        city: full[2].trim(),
+        state: full[3],
+      };
+    }
+    const zip = inner.match(/\b(\d{5}(?:-\d{4})?)\b/);
+    return {
+      ...empty,
+      streetAddress: inner,
+      postalCode: zip?.[1] ?? null,
+    };
+  }
+
+  /**
+   * Geography from an office name when `office.location` is absent: strip
+   * parentheticals, take the last `" - "` segment, and accept a parsed `city`
+   * only when the segment looks geographic (a state/country parsed out, or
+   * no site-name keyword and no digits). Pseudo-sites ("Any location",
+   * "Remote", "Multiple Locations") yield no geography.
+   */
+  private officeGeoFromName(name: string | null): Partial<OfficeDto> {
+    if (!name) return {};
+    // `(?<!\s)`: a match starts at the head of its whitespace run (the same
+    // matches; a long run is no longer rescanned from every position — Spec 1689)
+    const noParen = name.replace(/(?<!\s)\s*\([^()]*\)/g, '').trim();
+    const tail = noParen.split(' - ').pop()?.trim() ?? '';
+    if (!tail) return {};
+    if (/\bremote\b|\b(?:any|multiple|various)\s+locations?\b/i.test(tail)) {
+      return {};
+    }
+    const parsed = parseLocationText(tail).location;
+    if (!parsed) return {};
+    const named =
+      /\b(?:hq|headquarters|office|campus|ranch|lab(?:s)?|studio(?:s)?|facility|site|plant|warehouse|factory)\b/i.test(
+        tail,
+      ) || /\d/.test(tail);
+    const acceptCity = Boolean(parsed.state || parsed.country) || !named;
+    return {
+      city: acceptCity ? (parsed.city ?? null) : null,
+      state: parsed.state ?? null,
+      country: typeof parsed.country === 'string' ? parsed.country : null,
+    };
   }
 
   /**

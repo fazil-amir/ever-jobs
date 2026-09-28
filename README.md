@@ -13,7 +13,7 @@
 
 It is also used by our other platform, **Ever® Hust™ — The Anti-Hustle Career OS**: an open, agentic job-search platform that finds and evaluates opportunities, tailors your applications, and then tracks every application from the initial search all the way to a signed offer, see: <https://github.com/ever-hust/ever-hust> (AGPL v3)
 
-### Search-Based Job Boards (107)
+### Search-Based Job Boards (109)
 
 | Source                      | Method                 | Region                              |
 | --------------------------- | ---------------------- | ----------------------------------- |
@@ -24,7 +24,7 @@ It is also used by our other platform, **Ever® Hust™ — The Anti-Hustle Care
 | **Google Jobs**             | Search page parsing    | Global                              |
 | **Bayt**                    | HTML parsing (Cheerio) | Middle East / International         |
 | **Naukri**                  | REST API               | India                               |
-| **BDJobs**                  | HTML parsing (Cheerio) | Bangladesh                          |
+| **BDJobs**                  | REST API (public JSON) | Bangladesh                          |
 | **Internshala**             | HTML parsing (Cheerio) | India (internships & jobs)          |
 | **Exa**                     | Exa AI search API      | Global                              |
 | **Upwork**                  | GraphQL API (OAuth2)   | Global (freelance)                  |
@@ -124,8 +124,10 @@ It is also used by our other platform, **Ever® Hust™ — The Anti-Hustle Care
 | **EcoJobs**                 | RSS feed               | Global (environmental/conservation) |
 | **JobsDB**                  | JSON API (Chalice)     | Asia-Pacific (SG, HK, TH)           |
 | **TechCareers**             | HTML scraping          | US (tech niche)                     |
+| **Level**                   | MCP server + RSS feed  | Global (AI-rated roles)             |
+| **Simplify**                | Public listings JSON   | US (new grad & internships)         |
 
-### ATS Job Boards (38)
+### ATS Job Boards (39)
 
 ATS scrapers require a `companySlug` to target a specific company's job board. Ever Jobs integrates directly with each ATS platform's structured API, detecting new postings at the source — often hours before they appear on aggregated job boards like LinkedIn or Indeed.
 
@@ -169,6 +171,7 @@ ATS scrapers require a `companySlug` to target a specific company's job board. E
 | **Crelate**            | Crelate            | REST API (API Key)        | Recruiting firms                                             |
 | **iSmartRecruit**      | iSmartRecruit      | REST API (API Key)        | Global ATS                                                   |
 | **Recruiterflow**      | Recruiterflow      | REST API (API Key)        | Recruiting agencies                                          |
+| **InHire**             | InHire             | REST API (public, tenant) | Brazilian companies                                          |
 
 ### Company-Specific Scrapers (15)
 
@@ -200,8 +203,9 @@ Direct integrations with major tech companies' career APIs.
 - 🖥️ **CLI & API** — Use via REST API or command-line with JSON, CSV, table, or summary output
 - 🤖 **MCP server** — [Model Context Protocol](https://modelcontextprotocol.io/) server for ChatGPT, Claude, and Copilot
 - 🌐 **Country-aware** — Indeed & Glassdoor support 65+ countries with automatic domain resolution
-- 🔄 **Proxy rotation** — Built-in rotating proxy support (HTTP, HTTPS, SOCKS5)
-- ⏱️ **Rate limiting** — Configurable min/max delay between requests to avoid detection
+- 🤝 **Polite by default** — Honest, configurable User-Agent, per-host pacing, back-off that honours `Retry-After`, optional robots.txt, and an egress guard; every knob configurable by env, plugin, operator per site/host, and per request ([crawl policy](docs/CRAWL_POLICY.md))
+- 🔄 **Proxy support** — HTTP, HTTPS, SOCKS5 proxies; rotation configurable: one stable proxy per site (default), per scrape, or round-robin per request
+- ⏱️ **Rate limiting** — Configurable min/max delay between requests, enforced per host across concurrent requests
 - 📊 **Salary enrichment** — Extracts salary from descriptions when not provided directly
 - 💰 **Annual salary normalization** — Convert hourly/monthly/weekly wages to annual equivalents
 - 📝 **Description formats** — Returns descriptions as Markdown, HTML, or plain text
@@ -297,6 +301,12 @@ npm run cli -- search -q "typescript" --remote -f table
 # With rate limiting (1-3 second delay between requests)
 npm run cli -- search -q "engineer" --rate-delay-min 1 --rate-delay-max 3
 
+# Per-request crawl policy: one request at a time per host, 2 s apart, sitemap discovery
+npm run cli -- search -s softy --company-slug acme --max-per-host 1 --min-interval-ms 2000 --discovery sitemap
+
+# Reproduce the pre-1690 crawler behaviour for this run
+npm run cli -- search -q "engineer" --crawl-preset legacy
+
 # Get help
 npm run cli -- search --help
 ```
@@ -308,6 +318,10 @@ npm run cli -- search --help
 | `--site [sites...]`       | `-s`  | Sites to search (default: all)                   |
 | `--search-term <term>`    | `-q`  | Job search keywords                              |
 | `--location <loc>`        | `-l`  | Location to search                               |
+| `--locations <locs...>`  |       | Several locations, searched one after another    |
+| `--exclude-title <t...>`  |       | Drop jobs whose title has any of these terms     |
+| `--exclude-keyword <t...>` |      | Drop jobs whose title or description has them    |
+| `--exclude-preset <p...>` |       | Curated exclusion list: `security_clearance`     |
 | `--company-slug <slug>`   |       | Company identifier for ATS scrapers              |
 | `--remote`                | `-r`  | Remote jobs only                                 |
 | `--results <n>`           | `-n`  | Results per site (default: 15)                   |
@@ -317,11 +331,22 @@ npm run cli -- search --help
 | `--job-type <type>`       |       | `fulltime`, `parttime`, `internship`, `contract` |
 | `--hours-old <h>`         |       | Max job age in hours                             |
 | `--enforce-annual-salary` |       | Convert wages to annual                          |
-| `--rate-delay-min <s>`    |       | Min delay between requests (seconds)             |
+| `--rate-delay-min <s>`    |       | Min delay between requests (seconds; per host bucket) |
 | `--rate-delay-max <s>`    |       | Max delay between requests (seconds)             |
 | `--stdin`                 |       | Read JSON input from stdin (for LLMs)            |
 | `--no-description`        |       | Omit descriptions from output (reduces tokens)   |
 | `--proxy [urls...]`       | `-p`  | Proxy URLs for rotation                          |
+| `--user-agent <ua>`       |       | Custom User-Agent (implies `--user-agent-mode strict` unless one is given) |
+| `--crawl <json>`          |       | Per-request crawl policy as JSON (any field, see [crawl policy](docs/CRAWL_POLICY.md)) |
+| `--user-agent-mode <m>`   |       | `identify` (default), `strict`, `plugin`         |
+| `--proxy-rotation <m>`    |       | `per-host` (default), `per-scrape`, `per-request`, `off` |
+| `--max-per-host <n>`      |       | Max requests in flight per host bucket (0 = unlimited) |
+| `--min-interval-ms <ms>`  |       | Minimum gap between request starts per host bucket |
+| `--crawl-retries <n>`     |       | Retries per request on 429/5xx                   |
+| `--robots-txt <m>`        |       | `off` (default), `crawl-delay`, `respect`        |
+| `--discovery <m>`         |       | `auto` (default), `sitemap`, `listing` (e.g. Softy) |
+| `--crawl-preset <p>`      |       | `polite` (default), `legacy` (pre-1690), `strict` — for this run |
+| `--caller-overrides <m>`  |       | `any` (default), `stricter`, `none` — for this run |
 | `--verbose`               | `-v`  | Debug output                                     |
 
 ### JSON Stdin Mode (for LLMs)
@@ -356,8 +381,81 @@ All settings are configurable via environment variables. Copy `.env.example` to 
 | `LOG_LEVEL`            | `info`      | Logging level                  |
 | `ENABLE_SWAGGER`       | `true`      | Enable Swagger UI              |
 | `PORT`                 | `3001`      | Server port                    |
+| `EVER_JOBS_CLASSIFY_CAREER_LEVEL` | `true` | Attach `careerLevel` to every returned job; `false` removes it ([Career level](#career-level)) |
+| `EVER_JOBS_CRAWL_PRESET` | `polite`  | Crawl behaviour preset: `polite`, `legacy` (exact pre-1690 behaviour), `strict` |
+| `EVER_JOBS_CRAWL_USER_AGENT` | `default` | User-Agent; `default` = honest Ever Jobs UA, `browser` = pre-1690 Chrome UA, or any string |
+| `EVER_JOBS_CRAWL_USER_AGENT_MODE` | `identify` | `identify`, `strict`, `plugin` — who decides the UA on the wire |
+| `EVER_JOBS_CRAWL_CONTACT` | (empty) | Contact (e-mail/URL) inserted into the default UA so site operators can reach you |
+| `EVER_JOBS_CRAWL_FROM` | (empty) | Adds a `From:` header                                |
+| `EVER_JOBS_CRAWL_MAX_CONCURRENT_PER_HOST` | `4` | Requests in flight per host (0 = unlimited)     |
+| `EVER_JOBS_CRAWL_MIN_INTERVAL_MS` | `100` | Minimum gap between request starts per host       |
+| `EVER_JOBS_CRAWL_PROXY_ROTATION` | `per-host` | `per-host`, `per-scrape`, `per-request`, `off` |
+| `EVER_JOBS_CRAWL_PROXIES` | (empty) | Proxy list; falls back to `DEFAULT_PROXIES`          |
+| `EVER_JOBS_CRAWL_RETRIES` | `2`     | Retries on `EVER_JOBS_CRAWL_RETRY_STATUSES` (`429,502,503,504`); at most `10` |
+| `EVER_JOBS_CRAWL_MAX_RETRY_AFTER_MS` | `60000` | Longer `Retry-After` → give up and cool the host |
+| `EVER_JOBS_CRAWL_THROTTLE_RETRY_DELAY_MS` | `5000` | A `429`/`503` waits at least this (doubling per retry) and cools the host that long; `0` = no floor |
+| `EVER_JOBS_CRAWL_ROBOTS_TXT` | `off` | `off`, `crawl-delay`, `respect`                        |
+| `EVER_JOBS_CRAWL_BLOCK_PRIVATE_NETWORKS` | `true` | Refuse private/internal destinations (set `false` for local mocks) |
+| `EVER_JOBS_CRAWL_POLICIES` | (empty) | JSON per-site / per-host policies (`{"sites":{…},"hosts":{…}}`) |
+| `EVER_JOBS_CRAWL_CALLER_OVERRIDES` | `any` | What a request's `crawl` may change: `any`, `stricter`, `none` |
 
-See [`.env.example`](.env.example) for the full list.
+See [`.env.example`](.env.example) for the full list, and [`docs/CRAWL_POLICY.md`](docs/CRAWL_POLICY.md) for every crawl-policy variable, presets, precedence and per-site/per-host examples.
+
+### Storage backends
+
+Persisting search results is **off by default** (Spec 1722). Ever Jobs is a live aggregator:
+the search API answers from the fan-out, and nothing in the API reads the store back. A fork
+that wants its own corpus switches on a durable backend:
+
+| `EVER_JOBS_STORE` | `EVER_JOBS_PERSIST_SEARCH` | Backend | Persists every search? | Also required |
+| ----------------- | -------------------------- | ------- | ---------------------- | ------------- |
+| unset | unset | memory | no | — |
+| unset | `false` | memory | no | — |
+| unset / `memory` | `true` | memory (process heap, capped by `EVER_JOBS_STORE_MAX_ROWS`) | yes | — |
+| `sqlite` | unset | SQLite (Drizzle) | **yes** | `EVER_JOBS_STORE_SQLITE_PATH` |
+| `postgres` | unset | Postgres (Prisma) | **yes** | `EVER_JOBS_STORE_DATABASE_URL` or `DATABASE_URL` |
+| `postgres` | `false` | Postgres, connected but unused | no | same |
+
+- `EVER_JOBS_STORE` also accepts the plugin package names `store-memory`, `store-sqlite-drizzle`,
+  `store-postgres-prisma` (with or without `@ever-jobs/`), or set `EVER_JOBS_STORE_PLUGIN`
+  instead. Both set to different backends → boot fails with `ERR_STORE_CONFLICT`.
+- An explicit `EVER_JOBS_PERSIST_SEARCH` always wins.
+- The boot **fails fast** with a message naming the variable when a selected backend is missing
+  its configuration (`ERR_STORE_CONFIG_MISSING`), when Postgres is unreachable
+  (`ERR_STORE_BACKEND_DOWN`, URL printed without credentials), or when the value is unknown
+  (`ERR_STORE_NOT_FOUND`).
+- Each persisted row's id is the job's `dedupKey`; source sightings go to `source_observation`.
+
+**Enabling Postgres storage in a fork:**
+
+```bash
+npm ci
+npm run store:postgres:generate          # generates @prisma/client for the store schema
+export EVER_JOBS_STORE=postgres
+export EVER_JOBS_STORE_DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DATABASE'
+npm run store:postgres:migrate           # creates canonical_job + source_observation (+ pg_trgm)
+npm run store:postgres:status            # "Database schema is up to date!"
+npm run start:dev                        # log: "Postgres store connected: postgresql://HOST:5432/DATABASE"
+```
+
+`store:postgres:migrate` reads the same URL variables as the API. The migration runs
+`CREATE EXTENSION IF NOT EXISTS "pg_trgm"`, so the migrating role needs that privilege (or a DBA
+creates the extension once). The Docker image runs `prisma generate` during the build.
+
+**SQLite:** `EVER_JOBS_STORE=sqlite` and `EVER_JOBS_STORE_SQLITE_PATH=/var/lib/ever-jobs/jobs.db`
+(the directory is created; the schema is created on first boot).
+
+**Write path at list-mode size.** A list-mode search persists 20–30 k canonical jobs. Both
+durable backends write in chunks of `EVER_JOBS_STORE_BATCH_SIZE` rows (default `500`): Postgres
+sends one `INSERT … ON CONFLICT DO UPDATE` statement per chunk (no long-running transaction) and
+replaces observations with one statement per chunk that rewrites only rows whose URL, date or
+title changed; SQLite writes one transaction per chunk and lets the event loop run between
+chunks, so requests and NDJSON heartbeats keep flowing. Writes are atomic per chunk — every
+write is an idempotent upsert, so a failure part-way is completed by the next persist. Postgres
+also accepts `EVER_JOBS_STORE_TX_TIMEOUT_MS` (default `30000`) and
+`EVER_JOBS_STORE_TX_MAX_WAIT_MS` (default `10000`) for its remaining interactive transactions;
+the pool size is Prisma's `?connection_limit=N` on the URL. An invalid value fails the boot
+with `ERR_STORE_CONFIG_INVALID`.
 
 ---
 
@@ -431,6 +529,10 @@ curl -X POST "http://localhost:3001/api/jobs/search?paginate=true&page=1&page_si
   -d '{"searchTerm": "developer"}'
 ```
 
+Each page is its own search request. Pages share one crawl only through the search cache
+(`ENABLE_CACHE=true` and a raw set within `EVER_JOBS_CACHE_MAX_JOBS`); without it every page
+re-runs the whole fan-out and pages can disagree — see "Getting ALL jobs (list mode)" below.
+
 #### Paginated Response
 
 ```json
@@ -445,6 +547,232 @@ curl -X POST "http://localhost:3001/api/jobs/search?paginate=true&page=1&page_si
   "previous_page": null
 }
 ```
+
+#### Getting ALL jobs (list mode)
+
+Omit `searchTerm` — or send `null`, `""` or whitespace — and the search runs in **list mode**
+(Spec 1720): no keyword filter is applied anywhere, and every selected source returns what it
+can list without a keyword, up to `resultsWanted` **per source**. Keyword and list calls
+complement each other: some sources only return results for a keyword, others list their whole
+board.
+
+```bash
+# Everything the non-ATS catalogue can list, up to 100 jobs per source, streamed (see below)
+curl -N -X POST "http://localhost:3001/api/jobs/search?format=ndjson" \
+  -H 'Content-Type: application/json' \
+  -d '{"resultsWanted": 100}'
+```
+
+**Use NDJSON for list mode.** `?format=ndjson` streams the whole result of **one** crawl line by
+line. An **unpaginated JSON** (or CSV) list-mode response builds the whole body as one string and
+is capped only by `EVER_JOBS_MAX_JOBS_PER_SEARCH` (40 000 raw jobs by default) — at a few KB per
+job that is a string of 100 MB or more on top of the jobs themselves.
+
+**Pagination is not a substitute.** Every `?paginate=true` page is a separate search request;
+the pages come from one crawl only while the search cache holds that crawl's raw set, which needs
+**all** of: the cache is enabled (`ENABLE_CACHE=true` — off by default), the raw set holds at most
+`EVER_JOBS_CACHE_MAX_JOBS` jobs (5 000 by default; a catalogue-wide list-mode crawl holds
+20–30 k), the crawl was complete (an incomplete one is never cached), and the entry has not
+expired or been evicted by another search (`CACHE_MAX_ITEMS`). Otherwise **every page re-runs the
+whole fan-out** — each page costs a full crawl, and consecutive pages come from different crawls,
+so they can disagree: a job can appear on two pages or on none, and `count` / `total_pages` can
+change from one page to the next.
+
+**Memory.** The whole result is held in memory until it has been deduplicated, even when
+streamed (NDJSON only serialises line by line): a catalogue-wide list-mode crawl returns
+20–30 k jobs today, at a few KB per job. These server-side bounds keep one request from
+exhausting the heap, for JSON, CSV, NDJSON and GraphQL alike:
+
+| Variable | Default | Effect |
+| -------- | ------- | ------ |
+| `EVER_JOBS_MAX_RESULTS_WANTED` | `1000` | `resultsWanted` is clamped to this, per source (warning logged). `0` = no cap |
+| `EVER_JOBS_MAX_JOBS_PER_SEARCH` | `40000` | once the fan-out holds this many raw jobs, no further source is **started** (in-flight ones finish, like the deadline); each skipped source gets a `per_source` row with the detail `skipped: per-search job ceiling reached`. `0` = no cap. Lowered from 100 000 until the per-job footprint is measured in a pod |
+| `EVER_JOBS_CACHE_MAX_JOBS` | `5000` | a search whose raw fan-out holds more jobs is served in full but **not cached** (the in-process cache would pin every job for the whole TTL). `0` = never cache |
+
+Peak raw jobs per request ≤ `EVER_JOBS_MAX_JOBS_PER_SEARCH + EVER_JOBS_SEARCH_CONCURRENCY ×
+EVER_JOBS_MAX_RESULTS_WANTED` (40 000 + 64 × 1 000 with the defaults). Size both to your heap
+before raising either.
+
+- The request log prints `term=<none>` in list mode (never `term="undefined"`), and `""`,
+  whitespace, `null` and an omitted term share one cache entry.
+- A source that cannot list without a keyword (its plugin metadata sets
+  `requiresSearchTerm: true`; today `naukri`, `stepstone`, `careeronestop`) is **not called** in list mode; its
+  `per_source` row reads `empty` with the detail `requires a searchTerm; not queried in list mode`.
+- A source that fails without a keyword costs its own row, never the request.
+
+#### Streaming NDJSON
+
+`?format=ndjson` streams the result as newline-delimited JSON (Spec 1721) —
+`Content-Type: application/x-ndjson; charset=utf-8`, one JSON object per line:
+
+```text
+{"type":"progress","sourcesDone":0,"sourcesTotal":0,"jobs":0}
+{"type":"progress","sourcesDone":0,"sourcesTotal":1669,"jobs":0}
+{"type":"progress","sourcesDone":412,"sourcesTotal":1669,"jobs":6120}
+{"type":"job","data":{"id":"li-3693012711","title":"…","dedupKey":"4f1c…", …}}
+{"type":"job","data":{…}}
+{"type":"end","total":21873,"deduped":true,"durationMs":151234,"complete":true,"stopReason":null,"sourcesSkipped":0,"sourcesFailed":38,"sourcesPartial":3,"problemSources":[…],"problemSourcesTotal":57}
+```
+
+| Line | When |
+| ---- | ---- |
+| `progress` | first, immediately (`0/0/0` — this is what flushes the headers, also on a cache hit), again when the fan-out starts (real `sourcesTotal`), then at most every ~10 s while scraping, dedup, persistence and liveness run — doubles as a keep-alive for idle-timeout proxies |
+| `job` | one per job, **same order and same per-job JSON as the JSON response** (including `dedupKey` and any field another feature adds) |
+| `end` | exactly once, last; `total` equals the number of `job` lines; `complete`, `stopReason`, `sourcesSkipped`, `sourcesFailed` say whether the crawl covered every selected source; `sourcesPartial`, `problemSources`, `problemSourcesTotal` say which sources may not be used to expire postings (below) |
+| `error` | `{"type":"error","message":"…"}` if anything fails after the headers were sent — the stream then closes **without** an `end` line |
+
+**Was the crawl complete?** (Spec 1721 / FR-15) The `end` line says so:
+
+| Field | Meaning |
+| ----- | ------- |
+| `complete` | `true` when every selected source was started and allowed to finish. `false` when the fan-out deadline (`EVER_JOBS_FANOUT_DEADLINE_MS`) or the job ceiling (`EVER_JOBS_MAX_JOBS_PER_SEARCH`) left sources unscraped — then a posting missing from this result may simply belong to a source that never ran |
+| `stopReason` | `"deadline"`, `"job_ceiling"` (the first bound that tripped), or `null` when `complete` is `true` |
+| `sourcesSkipped` | sources that contributed nothing because the fan-out stopped: not started, or abandoned mid-flight at the deadline. Keyword-only sources that list mode does not call are not counted |
+| `sourcesFailed` | sources that ran and failed (`blocked`, `fetch_error`, `timeout`, `bad_input`, …). Failures do **not** make a crawl incomplete — a catalogue-wide crawl always has some |
+| `sourcesPartial` | sources that returned some jobs and then failed (`partial`) — not failures, but their lists are incomplete |
+| `problemSources` | `[{"site","reason"}]`, in fan-out order, at most 2 500 (the whole catalogue fits): every selected source whose result must **not** be used to expire its postings. `reason` is a failure reason (`blocked`, `fetch_error`, `timeout`, …), `partial`, `skipped` (a bound left it unstarted or abandoned it), `results_wanted` (it returned at least `resultsWanted` jobs, so its list was probably cut there) or `keyword_required` (list mode does not query it) |
+| `problemSourcesTotal` | how many sources qualified before the cap; larger than `problemSources.length` means the list was truncated |
+
+A cache hit reports the completeness of the crawl that produced the cached set. An incomplete
+crawl (`complete: false`) is never cached, so a retry gets a fresh chance at the sources the
+bound left out.
+
+**Deciding expiry — per source.** A consumer that closes postings missing from a crawl must decide
+it **per source**, never for the crawl as a whole: only a source this request **selected**, that
+is **not** listed in `problemSources`, ran cleanly — it finished, did not fail, and was not cut
+at `resultsWanted` — and only its postings may be expired by their absence. If
+`problemSourcesTotal` is larger than `problemSources.length` the list was truncated: expire
+nothing from that crawl. A `complete: true` crawl can still list problem sources (failures do not
+make a crawl incomplete).
+
+- **Decide expiry on a `dedup=false` crawl.** With `dedup=true` (the default) a posting of a clean
+  source can be missing merely because dedup merged it into another source's record: the kept job
+  of a merged cluster is the cluster's first job in output order, carrying that source's `site`
+  and `id` (and, after a fuzzy merge, possibly a different `dedupKey`). `?dedup=false` returns
+  every observation as its own job, so absence means the source did not return it.
+- **A clean source can still be cut short by its own paging limit.** The `results_wanted` check
+  only sees a source that returned **at least** `resultsWanted` jobs. A source that stops earlier
+  because of a limit of its own — a plugin that reads a fixed number of pages, or an upstream API
+  that caps its result count — returns fewer, is not listed, and yet did not list its whole board.
+  The server cannot tell that apart from a board that really has that few postings, so treat
+  absence from one clean crawl as evidence, not proof (e.g. require it across consecutive crawls,
+  or check the posting's URL) before closing a posting.
+
+```text
+{"type":"end","total":14022,"deduped":false,"durationMs":120412,"complete":false,"stopReason":"deadline","sourcesSkipped":611,"sourcesFailed":35,"sourcesPartial":4,"problemSources":[{"site":"indeed","reason":"blocked"},{"site":"remoteok","reason":"partial"},…],"problemSourcesTotal":650}
+```
+
+Consumer rules: **treat a missing `end` line as a truncated, failed result**; **only treat a crawl
+as complete when `complete` is `true`** — never infer "this posting is gone" from a crawl whose
+`end` line says `false` or has no `complete` field (servers before FR-15 do not send it); **expire
+per source only, from a `dedup=false` crawl** (above; servers before FR-20 send no `problemSources` —
+then expire nothing); and ignore line types and fields you do not know (new ones may be added).
+Input the search rejects before scraping (an unknown `siteCategories` value, a `companyDomain`
+that maps to no plugin) is answered with a plain **400** before any line is sent. If the client disconnects, the server stops starting
+new sources (in-flight ones finish) and discards the partial result — it is not cached, so a
+retry never receives a truncated set. `paginate`, `page` and `page_size` are ignored;
+`dedup`, `liveness` and `legitimacy` behave exactly as for JSON. Lines are written one at a time
+with back-pressure — the server never builds the whole payload as one string. The response
+sets `X-Accel-Buffering: no` so nginx-style proxies pass lines through as they are written.
+
+Every job in every format (JSON, CSV column, NDJSON, GraphQL) carries **`dedupKey`**: the sha-256
+of the normalised `company|title|location` — the same key the dedup engine clusters on, built from
+the same fields (the flat `location`, every per-site `locations[]` entry and `isRemote`). The same
+posting seen from a job board and from the company's ATS, today or next week, has the same
+`dedupKey`, so a consumer can upsert on it.
+
+Dedup (default `dedup=true`) only merges postings whose **locations are compatible** (the same
+place, one side naming none, or a multi-office posting that lists the other's office) and whose
+**employment types do not conflict** (an internship is never merged into a full-time posting, and
+two different employment labels from one source are two postings) — Spec 1724. A role posted once
+per office therefore comes back once per office. The kept job of a merged cluster carries the
+union of the cluster's `locations[]`. Two postings the engine keeps apart although their company,
+title and location coincide (e.g. a New York internship and a New York new-grad posting of the same
+title) get distinct `dedupKey`s on the default path; with `dedup=false` they share one.
+
+#### Choosing sources by category
+
+`siteCategories` restricts the default fan-out to plugins whose metadata category is listed:
+`job-board`, `niche`, `regional`, `remote`, `government`, `freelance`, `company`, `ats`.
+
+```bash
+curl -X POST http://localhost:3001/api/jobs/search \
+  -H 'Content-Type: application/json' \
+  -d '{"searchTerm": "rust", "siteCategories": ["job-board", "remote"]}'
+```
+
+- An explicit `siteType` / `companyDomain` wins; `siteCategories` is then ignored.
+- ATS plugins still need `companySlug`: without it the default fan-out excludes them, so
+  `["ats"]` alone selects nothing; with `companySlug`, `["ats"]` selects the ATS plugins.
+- An unknown value is rejected with **400** naming the allowed values.
+
+#### Liveness & legitimacy
+
+`?liveness=true` probes each returned posting URL with the `liveness-http` plugin and attaches
+`liveness: { state: active|expired|uncertain, checkedAt }`; `?legitimacy=true` attaches an
+in-process `legitimacy: { state, reasons }`. Both are **off unless requested**. The operator
+controls liveness server-side (Spec 1723):
+
+| Variable | Default | Effect |
+| -------- | ------- | ------ |
+| `EVER_JOBS_LIVENESS_ENABLED` | `true` | `true` honours `?liveness=true`; `false` never probes — the response carries no `liveness` even when requested |
+| `EVER_JOBS_LIVENESS_MAX_URLS` | `100` | probes per request; the first N jobs in output order are probed, the rest carry no `liveness`. `0` = no cap. 100 is the `page_size` ceiling, so paginated requests are never truncated |
+
+#### Fan-out deadline
+
+A search stops **starting** new sources once `EVER_JOBS_FANOUT_DEADLINE_MS` has elapsed
+(default `120000`; in-flight sources finish, and one that never settles is abandoned at the
+deadline). `0` disables the deadline. The older name `EVER_JOBS_SEARCH_DEADLINE_MS` is still
+read when the new one is unset. Raise it for catalogue-wide list-mode crawls — with NDJSON the
+client keeps receiving progress lines, so a long deadline no longer risks an idle timeout. A crawl
+the deadline (or `EVER_JOBS_MAX_JOBS_PER_SEARCH`) cut short is reported on the NDJSON `end` line as
+`"complete":false` with its `stopReason` — see "Was the crawl complete?" above.
+
+#### Career level
+
+Every job in every response format carries a server-computed `careerLevel` (Spec 1730): JSON,
+paginated JSON, NDJSON (inside each `job` line's `data`), CSV (`careerLevel.level`,
+`careerLevel.confidence` and `careerLevel.reasons` columns) and GraphQL
+(`careerLevel { level confidence reasons }`).
+
+```json
+"careerLevel": {
+  "level": "internship",
+  "confidence": "high",
+  "reasons": ["title: \"intern\"", "corroborated by jobType: internship"]
+}
+```
+
+- `level` is one of `internship`, `new_grad`, `entry`, `mid`, `senior`, `staff`, `principal`,
+  `manager`, `director`, `executive` or `unknown`. `confidence` is `high`, `medium` or `low`.
+- Deterministic and in-process: no network, no LLM. The title decides; the source `jobType` /
+  `employmentType` / `jobLevel` / `experienceRange` fields, then the first 3,000 visible
+  description characters (HTML stripped), fill in only when the title is silent, and otherwise
+  just move the confidence. The source fields themselves are never modified, and every one is
+  length-capped before it is read, so an oversized scraped value cannot make classification slow.
+- Guarded against the usual false friends: *Internal Audit Manager*, *International Sales*,
+  *Staff Nurse*, *Senior Living*, *Lead Generation*, *Associate Director*, *Senior Partner
+  Manager*. *Intern Program Manager* and *Campus Recruiter* run early-career programmes; they are
+  not early-career roles.
+- A title whose only cue is a season + year (*Software Engineer - Fall 2026*) is `internship` at
+  `low` confidence: it may be a full-time start date. Threshold on `confidence` if you need
+  high-precision internships; the `careerLevels` filter itself ignores confidence.
+- Filter server-side with `"careerLevels": ["internship", "new_grad"]` in the request body
+  (GraphQL: `careerLevels: [...]`). JSON and `?format=ndjson` share one pipeline, so they
+  return the same filtered set in the same order. Unknown values are rejected (REST and NDJSON
+  400, GraphQL `BAD_REQUEST`). `count` and the NDJSON `end` line's `total` are post-filter.
+  The filter fails closed: if it cannot be applied (no classifier bound, or classification
+  failed) the request is a 503, never an unfiltered 200; on NDJSON, whose status line is already
+  sent, it is an `error` line and no `end` line. It is applied after the cache, so it does not
+  change the search's cache entry (one entry holds the raw fan-out and its crawl-completeness
+  record): a filtered and an unfiltered search share it.
+- Only the jobs a response returns are classified when no filter is set: a page of
+  `?paginate=true` classifies that page, and `?format=ndjson` classifies each batch of 256 jobs
+  just before writing their lines, so a client that stops reading stops the classification. A
+  `careerLevels` filter needs every job's level, so it classifies the whole deduplicated set once.
+- Operators can switch the field off with `EVER_JOBS_CLASSIFY_CAREER_LEVEL=false`; an explicit
+  `careerLevels` filter is still honoured.
+- Rules, evaluation and decisions: [Spec 1730](.specify/specs/1730-career-level-classifier/spec.md).
 
 ### `POST /api/jobs/analyze`
 
@@ -464,30 +792,73 @@ All parameters are optional. When `siteType` is omitted, search + company scrape
 
 | Parameter                  | Type       | Default    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `siteType`                 | `string[]` | all        | Sites to search. **Search**: `linkedin`, `indeed`, `zip_recruiter`, `glassdoor`, `google`, `bayt`, `naukri`, `bdjobs`, `internshala`, `exa`, `upwork`, `remoteok`, `remotive`, `jobicy`, `himalayas`, `arbeitnow`, `weworkremotely`, `usajobs`, `adzuna`, `reed`, `jooble`, `careerjet`, `dice`, `simplyhired`, `wellfound`, `stepstone`, `monster`, `careerbuilder`, `builtin`, `snagajob`, `dribbble`, `themuse`, `workingnomads`, `fourdayweek`, `startupjobs`, `nodesk`, `web3career`, `echojobs`, `jobstreet`, `careeronestop`, `arbeitsagentur`, `hackernews`, `landingjobs`, `findwork`, `jobdataapi`, `authenticjobs`, `cryptojobslist`, `jobspresso`, `higheredjobs`, `fossjobs`, `larajobs`, `pythonjobs`, `drupaljobs`, `realworkfromanywhere`, `golangjobs`, `wordpressjobs`, `talroo`, `infojobs`, `jobtechdev`, `francetravail`, `navjobs`, `jobsacuk`, `jobindex`, `getonboard`, `freelancercom`, `joinrise`, `canadajobbank`, `reliefweb`, `undpjobs`, `devitjobs`, `pyjobs`, `vuejobs`, `conservationjobs`, `coroflot`, `berlinstartupjobs`, `railsjobs`, `elixirjobs`, `crunchboard`, `cryptocurrencyjobs`, `hasjob`, `icrunchdata`, `swissdevjobs`, `germantechjobs`, `virtualvocations`, `nofluffjobs`, `greenjobsboard`, `eurojobs`, `opensourcedesignjobs`, `academiccareers`, `remotefirstjobs`, `djinni`, `headhunter`, `habrcareer`, `mycareersfuture`, `jobsinjapan`, `duunitori`, `jobsch`, `guardianjobs`, `androidjobs`, `iosdevjobs`, `devopsjobs`, `functionalworks`, `powertofly`, `clojurejobs`, `ecojobs`. **ATS**: `ashby`, `greenhouse`, `lever`, `workable`, `smartrecruiters`, `rippling`, `workday`, `recruitee`, `teamtailor`, `bamboohr`, `personio`, `jazzhr`, `icims`, `taleo`, `successfactors`, `jobvite`, `adp`, `ukg`, `breezyhr`, `comeet`, `pinpoint`, `manatal`, `paylocity`, `freshteam`, `bullhorn`, `trakstar`, `hiringthing`, `loxo`, `fountain`, `deel`, `phenom`, `jobylon`, `homerun`, `jobscore`, `talentlyft`, `crelate`, `ismartrecruit`, `recruiterflow`. **Company**: `amazon`, `apple`, `microsoft`, `nvidia`, `tiktok`, `uber`, `cursor`, `google_careers`, `meta`, `netflix`, `stripe`, `openai`, `ibm`, `boeing`, `zoom` |
+| `siteType`                 | `string[]` | all        | Sites to search. **Search**: `linkedin`, `indeed`, `zip_recruiter`, `glassdoor`, `google`, `bayt`, `naukri`, `bdjobs`, `internshala`, `exa`, `upwork`, `remoteok`, `remotive`, `jobicy`, `himalayas`, `arbeitnow`, `weworkremotely`, `usajobs`, `adzuna`, `reed`, `jooble`, `careerjet`, `dice`, `simplyhired`, `wellfound`, `stepstone`, `monster`, `careerbuilder`, `builtin`, `snagajob`, `dribbble`, `themuse`, `workingnomads`, `fourdayweek`, `startupjobs`, `nodesk`, `web3career`, `echojobs`, `jobstreet`, `careeronestop`, `arbeitsagentur`, `hackernews`, `landingjobs`, `findwork`, `jobdataapi`, `authenticjobs`, `cryptojobslist`, `jobspresso`, `higheredjobs`, `fossjobs`, `larajobs`, `pythonjobs`, `drupaljobs`, `realworkfromanywhere`, `golangjobs`, `wordpressjobs`, `talroo`, `infojobs`, `jobtechdev`, `francetravail`, `navjobs`, `jobsacuk`, `jobindex`, `getonboard`, `freelancercom`, `joinrise`, `canadajobbank`, `reliefweb`, `undpjobs`, `devitjobs`, `pyjobs`, `vuejobs`, `conservationjobs`, `coroflot`, `berlinstartupjobs`, `railsjobs`, `elixirjobs`, `crunchboard`, `cryptocurrencyjobs`, `hasjob`, `icrunchdata`, `swissdevjobs`, `germantechjobs`, `virtualvocations`, `nofluffjobs`, `greenjobsboard`, `eurojobs`, `opensourcedesignjobs`, `academiccareers`, `remotefirstjobs`, `djinni`, `headhunter`, `habrcareer`, `mycareersfuture`, `jobsinjapan`, `duunitori`, `jobsch`, `guardianjobs`, `androidjobs`, `iosdevjobs`, `devopsjobs`, `functionalworks`, `powertofly`, `clojurejobs`, `ecojobs`, `jobsbylevel`, `simplifyjobs`. **ATS**: `ashby`, `greenhouse`, `lever`, `workable`, `smartrecruiters`, `rippling`, `workday`, `recruitee`, `teamtailor`, `bamboohr`, `personio`, `jazzhr`, `icims`, `taleo`, `successfactors`, `jobvite`, `adp`, `ukg`, `breezyhr`, `comeet`, `pinpoint`, `manatal`, `paylocity`, `freshteam`, `bullhorn`, `trakstar`, `hiringthing`, `loxo`, `fountain`, `deel`, `phenom`, `jobylon`, `homerun`, `jobscore`, `talentlyft`, `crelate`, `ismartrecruit`, `recruiterflow`, `inhire`. **Company**: `amazon`, `apple`, `microsoft`, `nvidia`, `tiktok`, `uber`, `cursor`, `google_careers`, `meta`, `netflix`, `stripe`, `openai`, `ibm`, `boeing`, `zoom` |
 | `companySlug`              | `string`   | —          | Company identifier for ATS scrapers (e.g. `stripe`, `notion`). When set without `siteType`, only ATS scrapers run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `searchTerm`               | `string`   | —          | Job search keywords                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `siteCategories`           | `string[]` | —          | Restrict the default fan-out to plugin categories: `job-board`, `niche`, `regional`, `remote`, `government`, `freelance`, `company`, `ats`. Ignored when `siteType` is set; unknown values → 400 (see "Choosing sources by category") |
+| `searchTerm`               | `string`   | —          | Job search keywords. Omit (or send `null` / `""` / whitespace) for **list mode**: no keyword filter, every selected source lists what it can (see "Getting ALL jobs") |
 | `googleSearchTerm`         | `string`   | —          | Google-specific search query override                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `location`                 | `string`   | —          | Location to search near                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `locations`                | `string[]` | —          | Several locations searched in one request (up to 25; the first `EVER_JOBS_SEARCH_MAX_LOCATIONS`, default 10, are searched and the rest come back as `bad_input` diagnostics). Each source runs once per location, one after another, with its own `resultsWanted` / `offset`; same-source duplicates are removed. `location`, when also set, is searched first (Spec 1700) |
+| `excludeTitleTerms`        | `string[]` | —          | Drop jobs whose title contains any of these words or phrases: whole-word, case- and accent-insensitive, trailing `*` = prefix, literal text (never a regex), negated mentions ignored. Applied after dedup (Spec 1700) |
+| `excludeKeywords`          | `string[]` | —          | Drop jobs whose title or description contains any of these words or phrases (same rules as `excludeTitleTerms`) |
+| `excludePresets`           | `string[]` | —          | Curated exclusion lists matched against title + description: `security_clearance` |
 | `distance`                 | `number`   | `50`       | Search radius in miles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `isRemote`                 | `boolean`  | `false`    | Filter for remote jobs only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `jobType`                  | `string`   | —          | `fulltime`, `parttime`, `internship`, `contract`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `easyApply`                | `boolean`  | —          | Filter for easy-apply / hosted jobs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `resultsWanted`            | `number`   | `15`       | Number of results per site                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `resultsWanted`            | `number`   | `15`       | Number of results **per source** (also in list mode); clamped to `EVER_JOBS_MAX_RESULTS_WANTED` (default `1000`)                                                                                                                                          |
 | `offset`                   | `number`   | `0`        | Skip first N results                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `hoursOld`                 | `number`   | —          | Max job age in hours                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `country`                  | `string`   | `USA`      | Country for Indeed/Glassdoor domain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `descriptionFormat`        | `string`   | `markdown` | `markdown`, `html`, or `plain`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `linkedinFetchDescription` | `boolean`  | `false`    | Fetch full LinkedIn descriptions (slower)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `linkedinFetchCompanyDetails` | `boolean` | unset (env) | Fetch each LinkedIn company page once (sequential, cached, capped at 25) to fill website, size, HQ, industry, description and logo. Unset = `EVER_JOBS_LINKEDIN_FETCH_COMPANY_DETAILS` (off) (Spec 1701) |
 | `linkedinCompanyIds`       | `number[]` | —          | Filter LinkedIn by company IDs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `enforceAnnualSalary`      | `boolean`  | `false`    | Convert all wages to annual equivalent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `rateDelayMin`             | `number`   | —          | Minimum delay between requests in seconds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `rateDelayMax`             | `number`   | —          | Maximum delay between requests in seconds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `rateDelayMin`             | `number`   | —          | Minimum delay between requests in seconds. Maps to `crawl.minIntervalMs` (× 1000), enforced per host bucket across concurrent requests |
+| `rateDelayMax`             | `number`   | —          | Maximum delay between requests in seconds. Maps to `crawl.jitterMs` = (max − min) × 1000 |
 | `requestTimeout`           | `number`   | `60`       | Request timeout in seconds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `proxies`                  | `string[]` | —          | Proxy URLs for rotation (`host:port` or `user:pass@host:port`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `proxies`                  | `string[]` | —          | Proxy URLs (`host:port` or `user:pass@host:port`). Which one a request uses follows `crawl.proxyRotation` (default: one stable proxy per host); the operator may refuse caller proxies (`EVER_JOBS_CRAWL_CALLER_PROXIES=none`) |
 | `caCert`                   | `string`   | —          | Path to CA certificate for proxies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `userAgent`                | `string`   | —          | Custom User-Agent string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `userAgent`                | `string`   | —          | Custom User-Agent string. Maps to `crawl.userAgent`, and to `crawl.userAgentMode: "strict"` unless that is set, so this UA is what goes out |
 | `clientIp`                 | `string`   | —          | Client IP address for sources that require it (e.g. CareerJet). Also useful for proxy rotation strategies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `careerLevels`             | `string[]` | —          | Keep only jobs whose server-computed `careerLevel.level` is in the list: `internship`, `new_grad`, `entry`, `mid`, `senior`, `staff`, `principal`, `manager`, `director`, `executive`, `unknown`. Unknown values → 400. See [Career level](#career-level) |
+| `retries` / `retryDelay` / `retryBackoff` / `retryMaxDelay` | `number` / `number` / `string` / `number` | — | Pre-1690 retry fields; when sent they map to `crawl.retries` / `retryBaseDelayMs` / `retryBackoff` / `retryMaxDelayMs` |
+| `crawl`                    | `object`   | —          | Per-request crawl policy (identity, pacing, proxy rotation, retries, robots.txt, discovery). Any subset of the fields below; subject to the operator's `EVER_JOBS_CRAWL_CALLER_OVERRIDES`. Wins over the flat fields above |
+
+#### `crawl` fields
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `userAgent` | `string` | Ever Jobs UA | UA to send; keywords `default`, `browser` |
+| `userAgentMode` | `string` | `identify` | `identify` (our UA; plugins with a stated reason may use theirs), `strict` (our UA always), `plugin` (the plugin's declared UA) |
+| `from` | `string` | — | `From:` header |
+| `stripClientHints` | `boolean` | `true` | Drop `sec-ch-ua*` headers when our UA is sent |
+| `proxyRotation` | `string` | `per-host` | `per-host`, `per-scrape`, `per-request`, `off` |
+| `rateLimitScope` | `string` | `host` | Pacing bucket: `host`, `domain` (registrable domain), `site` |
+| `maxConcurrentPerHost` | `integer` | `4` | Requests in flight per bucket (0 = unlimited) |
+| `minIntervalMs` / `jitterMs` | `integer` | `100` / `0` | Gap between request starts, plus random jitter |
+| `maxQueueWaitMs` | `integer` | `0` | Longest wait for a slot before failing fast (0 = no limit) |
+| `adaptiveThrottle` | `boolean` | `true` | Slow a host down after 429/503, recover on success |
+| `retries` / `retryStatuses` | `integer` / `integer[]` | `2` / `[429,502,503,504]` | Retry count (0–10) and statuses |
+| `retryBackoff` | `string` | `exponential` | `exponential`, `linear`, `constant` |
+| `retryBaseDelayMs` / `retryMaxDelayMs` | `integer` | `1000` / `30000` | Back-off base and cap |
+| `retryJitter` / `retryOnNetworkError` | `boolean` | `true` / `false` | Full jitter; also retry connection errors |
+| `respectRetryAfter` / `maxRetryAfterMs` / `retryAfterOverMax` | `boolean` / `integer` / `string` | `true` / `60000` / `give-up` | Honour `Retry-After`; beyond the max `give-up` (cool the host) or `cap` |
+| `throttleRetryDelayMs` | `integer` | `5000` | Back-off floor after a `429`/`503`: retry *n* waits at least this × 2^n (capped at `max(retryMaxDelayMs, this)`), and the host cools down at least that long; `0` = no floor |
+| `robotsTxt` | `string` | `off` | `off`, `crawl-delay`, `respect` |
+| `blockPrivateNetworks` | `boolean` | `true` | Egress guard; a request can turn it on, never off |
+| `discovery` | `string` | `auto` | `auto`, `sitemap`, `listing` (plugins with several strategies, e.g. Softy) |
+
+```json
+{
+  "siteType": ["softy"],
+  "companySlug": "acme",
+  "crawl": { "maxConcurrentPerHost": 1, "minIntervalMs": 2000, "discovery": "sitemap" }
+}
+```
+
+The same object is `crawl` on the GraphQL `SearchJobsInput` and the MCP `search_jobs` tool. Defaults shown are the `polite` preset (plugins and operators may set others); inspect what a source will actually run under with `GET /api/sources/:site/crawl-policy?host=<host>`. Details: [`docs/CRAWL_POLICY.md`](docs/CRAWL_POLICY.md).
 
 ---
 
@@ -541,7 +912,12 @@ JobPost
 ├── companyRating                (Naukri)
 ├── companyReviewsCount          (Naukri)
 ├── vacancyCount                 (Naukri)
-└── workFromHomeType             (Naukri)
+├── workFromHomeType             (Naukri)
+│
+└── careerLevel                  (every job; server-computed, Spec 1730)
+    ├── level                    internship | new_grad | entry | mid | senior | staff | principal | manager | director | executive | unknown
+    ├── confidence               high | medium | low
+    └── reasons[]
 ```
 
 ---
@@ -636,6 +1012,8 @@ This means you can:
 
 The `JobsService` orchestrator runs all selected sources concurrently using `Promise.allSettled`. Individual source failures don't affect other sources — results from successful sources are still returned.
 
+Concurrency toward any single host is bounded separately by the crawl policy's process-wide per-host limiter (see [HTTP Client](#http-client)), so many plugins sharing one ATS API cannot burst it. When the search deadline abandons a slow source, its queued and in-flight requests are cancelled.
+
 ### Routing Logic
 
 The service intelligently routes requests based on the input:
@@ -655,13 +1033,18 @@ After searching, the orchestrator applies post-processing:
 
 ### HTTP Client
 
-A custom `HttpClient` wraps Axios with:
+A custom `HttpClient` wraps Axios. Every request is governed by a **crawl policy** ([Spec 1690](.specify/specs/1690-crawl-policy/spec.md), operator guide [`docs/CRAWL_POLICY.md`](docs/CRAWL_POLICY.md)) resolved per request from a preset, environment variables, builtin limits for bulk ATS APIs, the plugin's manifest, operator per-site/per-host policies, and the search request's `crawl` object:
 
-- **Rotating proxy support** — Round-robin through HTTP/HTTPS/SOCKS5 proxies
-- **Rate limiting** — Configurable min/max delay between requests
-- **Automatic retries** — Configurable retry logic with exponential backoff
+- **Honest identity** — By default a User-Agent that names the project and links to it (`Mozilla/5.0 (compatible; EverJobs/1.0; +https://github.com/ever-jobs/ever-jobs)`), optionally with your contact (`EVER_JOBS_CRAWL_CONTACT`) and a `From:` header. Plugins send their own UA only when their API requires it and they say why (USAJobs, HeadHunter). The pre-1690 browser UA is `EVER_JOBS_CRAWL_USER_AGENT=browser`.
+- **Per-host pacing** — A process-wide limiter caps requests in flight and spaces request starts per host (or registrable domain, or site): 4 in flight and 100 ms by default, higher builtin limits for the Greenhouse, Lever, Ashby and SmartRecruiters APIs, adaptive slow-down after 429/503. `rateDelayMin`/`rateDelayMax` are enforced through it.
+- **Proxy rotation modes** — HTTP/HTTPS/SOCKS5 proxies with `per-host` (default: one stable proxy per site), `per-scrape`, `per-request` (round-robin, the pre-1690 behaviour) or `off`.
+- **Back-off that honours the server** — Retries with exponential back-off and jitter (default 2 on 429/502/503/504); never earlier than `Retry-After`; a `Retry-After` over 60 s gives up and cools the whole host.
+- **robots.txt** — Opt-in (`crawl-delay` or `respect`).
+- **Egress guard** — Refuses loopback, private, link-local and cluster-internal destinations (set `EVER_JOBS_CRAWL_BLOCK_PRIVATE_NETWORKS=false`, or allow-list hosts, for local mocks).
 - **Custom CA certificates** — For enterprise proxy setups
 - **Configurable timeouts** — Per-request and global timeout settings
+
+`EVER_JOBS_CRAWL_PRESET=legacy` reproduces the pre-1690 behaviour exactly (browser UA, round-robin proxies, no pacing, linear retries); `strict` is the most conservative preset.
 
 ---
 
@@ -702,7 +1085,7 @@ _\* indicates Glassdoor support_
 
 ### Bayt
 
-Searches internationally using `searchTerm` only.
+Searches `searchTerm` in one Bayt market: `country` when it is a Bayt market (UAE, Saudi Arabia, Qatar, Kuwait, Bahrain, Oman, Egypt, Morocco), else the market read from `location`, else `international`. Pages are fetched one at a time (at most 10) and a challenge is reported as a `blocked` diagnostic. `EVER_JOBS_BAYT_COUNTRY_SCOPE=false` always searches the international market, as before Spec 1710.
 
 ### Naukri
 
@@ -710,11 +1093,13 @@ India-specific. Supports INR salary parsing (Lakhs/Crores).
 
 ### BDJobs
 
-Bangladesh-specific.
+Bangladesh-specific. Reads the board's public JSON search and details API (Spec 1711): pages one at a time, `isRemote` / `jobType` / `hoursOld` filtered before any details request, details within the `descriptionDepth` budget. `BDJOBS_MODE=html` selects the earlier HTML scraper.
 
 ### Internshala
 
 India-specific. Supports both internships and full-time jobs. Extracts stipend, duration, and apply-by dates.
+
+Without `jobType` a search returns internships and jobs together (Spec 1706); `INTERNSHIP` or `FULL_TIME` narrows it to one stream. `searchTerm`, `location` and `isRemote` pick the listing path, one posting per card, at most 10 pages per stream, 2-5 s apart. `INTERNSHALA_DEFAULT_STREAMS=job` restores the earlier jobs-only default.
 
 ### Exa
 
@@ -791,6 +1176,10 @@ Job aggregator covering 70+ countries. Requires `JOOBLE_API_KEY` environment var
 
 Job aggregator covering 80+ countries with locale-based searches. Requires `CAREERJET_AFFID` environment variable. Register at [careerjet.com/partners](https://www.careerjet.com/partners/). Requires `clientIp` parameter for proper operation (falls back to `127.0.0.1`). Supports the `proxies` parameter for residential IP rotation. Credentials can also be passed per-request via the `auth.careerjet` field in the request body.
 
+### ReliefWeb
+
+Humanitarian and development jobs from the ReliefWeb API v2 (`https://api.reliefweb.int/v2/jobs`; v1 is decommissioned and answers HTTP 410). Since 1 November 2025 ReliefWeb only serves **pre-approved appnames**: request one at [apidoc.reliefweb.int/parameters#appname](https://apidoc.reliefweb.int/parameters#appname) and set `RELIEFWEB_APPNAME`. Without it the plugin sends the neutral `ever-jobs`, which ReliefWeb currently answers with HTTP 403; the source then returns no jobs with a `bad_input` diagnostic that names the variable. Job links are the public `reliefweb.int/job/<id>/<slug>` pages (Spec 1752).
+
 ---
 
 ## Using Individual Packages
@@ -866,6 +1255,7 @@ You've been rate-limited. Solutions:
 - Use `rateDelayMin` and `rateDelayMax` to add configurable delay between requests
 - Use the `proxies` parameter to rotate IPs
 - Reduce `resultsWanted`
+- Since Spec 1690 Ever Jobs already backs off on 429 and honours `Retry-After` (a long one cools the whole host and is reported as `rate_limited` in the search diagnostics). The polite fix is to slow down for that host — `crawl.maxConcurrentPerHost` / `crawl.minIntervalMs` per request, or an operator host policy — rather than to rotate IPs past the site's limit. See [`docs/CRAWL_POLICY.md`](docs/CRAWL_POLICY.md) §18.
 
 **Q: No results from Google?**
 Google requires very specific query syntax. Search for jobs on Google in your browser, then copy the exact search box text into `googleSearchTerm`.

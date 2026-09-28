@@ -17,12 +17,7 @@ import {
   Site,
   DescriptionFormat,
 } from '@ever-jobs/models';
-import {
-  htmlToPlainText,
-  markdownConverter,
-  extractEmails,
-  randomSleep,
-} from '@ever-jobs/common';
+import { extractEmails, htmlToPlainText, markdownConverter, parseLocationList, randomSleep } from '@ever-jobs/common';
 import { BrowserPool } from '@ever-jobs/common';
 import {
   STEPSTONE_DEFAULT_DOMAIN,
@@ -35,6 +30,11 @@ import { StepStoneJsonLd } from './stepstone.types';
   site: Site.STEPSTONE,
   name: 'StepStone',
   category: 'regional',
+  // Spec 1720 / FR-11 — the term is a URL path segment (`/jobs/<term>`) and,
+  // without one, this scraper searches "developer". In list mode that would be
+  // a silent keyword search, so it is not dispatched until a keyword-less
+  // listing URL is verified live.
+  requiresSearchTerm: true,
 })
 @Injectable()
 export class StepStoneService implements IScraper, OnModuleDestroy {
@@ -55,7 +55,7 @@ export class StepStoneService implements IScraper, OnModuleDestroy {
       const searchUrl = `https://${domain}/jobs/${encodeURIComponent(searchTerm)}`;
 
       this.logger.log(`StepStone: navigating to ${searchUrl}`);
-      await page.goto(searchUrl, {
+      await BrowserPool.navigate(page, searchUrl, {
         waitUntil: 'domcontentloaded',
         timeout: timeoutMs,
       });
@@ -138,6 +138,7 @@ export class StepStoneService implements IScraper, OnModuleDestroy {
 
         const company = card.find('[data-at="job-item-company-name"], .res-company-name').text().trim() || null;
         const location = card.find('[data-at="job-item-location"], .res-location').text().trim() || null;
+        const locationParsed = parseLocationList([location]);
 
         const id = `stepstone-${Math.abs(this.hashCode(href))}`;
 
@@ -146,7 +147,10 @@ export class StepStoneService implements IScraper, OnModuleDestroy {
           title,
           companyName: company,
           jobUrl: href,
-          location: location ? new LocationDto({ city: location }) : null,
+          location: location ? locationParsed.location : null,
+          ...(locationParsed.locations.length > 0
+            ? { locations: locationParsed.locations }
+            : {}),
           site: Site.STEPSTONE,
         }));
       } catch {

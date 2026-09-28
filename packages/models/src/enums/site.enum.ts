@@ -43,6 +43,7 @@ export enum Site {
   DICE = 'dice',
   SIMPLYHIRED = 'simplyhired',
   WELLFOUND = 'wellfound',
+  WELLFOUND_ATS = 'wellfound_ats',
   STEPSTONE = 'stepstone',
   MONSTER = 'monster',
   CAREERBUILDER = 'careerbuilder',
@@ -3561,6 +3562,214 @@ export enum Site {
   PULSESPACE = 'pulsespace',
   // Phase 1694: Spec 5115 — Source Company Plugin: ReNEW Manufacturing Solutions (renewmfgsol.com)
   RENEWMFGSOL = 'renewmfgsol',
+  // Phase 1695: Spec 5132 — Octbr (octbr.ai) multi-tenant ATS plugin (Laravel/Inertia data-page props)
+  OCTBR_AI = 'octbr_ai',
+  // Phase 1696: Spec 5135 — Nodi (nodi.global) multi-tenant ATS plugin (api.nodi.global JSON endpoints)
+  NODI_GLOBAL = 'nodi_global',
+  // Phase 1697: Spec 5140 — Source Company Plugin: Tau Robotics (tau-robotics.com)
+  TAU_ROBOTICS = 'tau-robotics',
+  // Phase 1698: Spec 5141 — Source Company Plugin: Powerus (power.us) — public /api/careers JSON feed
+  POWER_US = 'power_us',
+  // Phase 1699: Spec 5142 — Source Company Plugin: Mundane (mundane.co) — careers array embedded in JS bundle
+  MUNDANE_CO = 'mundane_co',
+
+  // Phase 1700: Spec 5143 — Source Company Plugin: Max Space (getmaxspace.com) — Webflow CMS careers, Indeed apply links
+  GETMAXSPACE = 'getmaxspace',
+
+  // Phase 1701: Spec 5147 — Source Company Plugin: Ampflame / Accurate Metals (ampflame.com) — Next.js careers table
+  AMPFLAME = 'ampflame',
+
+  // Phase 1702: Spec 5148 — Source Company Plugin: 4Earth (4earth.tech) — careers array embedded in Careers chunk
+  FOUR_EARTH_TECH = '4earth_tech',
+
+  // Phase 1703: Spec 5149 — Source Company Plugin: Zenno Astronautics (zennoastronautics.com) — Sanity CMS query API
+  ZENNOASTRONAUTICS = 'zennoastronautics',
+
+  // Phase 1704: Spec 5150 — Source Company Plugin: Thermwood (thermwood.com) — static job-card careers page
+  THERMWOOD = 'thermwood',
+
+  // Phase 1705: Spec 5151 — Source Company Plugin: Actor (labs.actor) — careers array in lazy webpack chunk
+  LABS_ACTOR = 'labs_actor',
+
+  // Phase 1706: Spec 5152 — Source Company Plugin: Soundryx (soundryx.com) — static Astro careers index + detail pages
+  SOUNDRYX = 'soundryx',
+
+  // Phase 1692: Spec 1692 — Source ATS Plugin: InHire (inhire.app) — public job-posts JSON API keyed by X-Tenant header
+  INHIRE = 'inhire',
+
+  // Phase 1693: Spec 1693 — Source Plugin: Level (jobsbylevel.com) — AI-rated job board via the public MCP server, RSS feed fallback
+  JOBSBYLEVEL = 'jobsbylevel',
+
+  // Phase 1694: Spec 1694 — Source Plugin: Simplify (new grad & internships) — public listings files, ETag-cached
+  SIMPLIFYJOBS = 'simplifyjobs',
+  // Spec 1736 — Source Company Plugin: Salesforce
+  SALESFORCE = 'salesforce',
+  // Spec 1736 — Source Company Plugin: Adobe
+  ADOBE = 'adobe',
+  // Spec 1736 — Source Company Plugin: Intel
+  INTEL = 'intel',
+  // Spec 1736 — Source Company Plugin: HP Inc.
+  HP = 'hp',
+  // Spec 1736 — Source Company Plugin: Hewlett Packard Enterprise
+  HPE = 'hpe',
+  // Spec 1736 — Source Company Plugin: Mastercard
+  MASTERCARD = 'mastercard',
+  // Spec 1736 — Source Company Plugin: PayPal
+  PAYPAL = 'paypal',
+  // Spec 1736 — Source Company Plugin: Capital One
+  CAPITAL_ONE = 'capitalone',
+  // Spec 1736 — Source Company Plugin: Walmart
+  WALMART = 'walmart',
+  // Spec 1736 — Source Company Plugin: Target
+  TARGET = 'target',
+  // Spec 1736 — Source Company Plugin: Northrop Grumman
+  NORTHROP_GRUMMAN = 'northropgrumman',
+  // Spec 1736 — Source Company Plugin: Booz Allen Hamilton
+  BOOZ_ALLEN = 'boozallen',
+  // Spec 1736 — Source Company Plugin: CACI
+  CACI = 'caci',
+  // Spec 1736 — Source Company Plugin: General Dynamics Information Technology
+  GDIT = 'gdit',
+  // Spec 1736 — Source Company Plugin: Leidos
+  LEIDOS = 'leidos',
+  // Spec 1736 — Source Company Plugin: Blue Origin
+  BLUE_ORIGIN = 'blueorigin',
+  // Spec 1736 — Source Company Plugin: Red Hat
+  RED_HAT = 'redhat',
+  // Spec 1736 — Source Company Plugin: Motorola Solutions
+  MOTOROLA_SOLUTIONS = 'motorolasolutions',
+  // Spec 1736 — Source Company Plugin: Stryker
+  STRYKER = 'stryker',
+  // Spec 1736 — Source Company Plugin: Johnson & Johnson
+  JNJ = 'jnj',
+  // Spec 1736 — Source Company Plugin: Philips
+  PHILIPS = 'philips',
+  // Spec 1736 — Source Company Plugin: McKesson
+  MCKESSON = 'mckesson',
+  // Spec 1736 — Source Company Plugin: Workday
+  WORKDAY_INC = 'workdayinc',
+  // Spec 1736 — Source Company Plugin: Micron Technology
+  MICRON = 'micron',
+  // Spec 1736 — Source Company Plugin: Analog Devices
+  ANALOG_DEVICES = 'analogdevices',
+  // Spec 1736 — Source Company Plugin: T-Mobile
+  T_MOBILE = 'tmobile',
+  // Spec 1736 — Source Company Plugin: Comcast
+  COMCAST = 'comcast',
+  // Spec 1736 — Source Company Plugin: The Walt Disney Company
+  DISNEY = 'disney',
+  // Spec 1736 — Source Company Plugin: Nike
+  NIKE = 'nike',
+  // Spec 1736 — Source Company Plugin: Fidelity Investments
+  FIDELITY = 'fidelity',
+  // Spec 1736 — Source Company Plugin: State Street
+  STATE_STREET = 'statestreet',
+  // Spec 1736 — Source Company Plugin: BlackRock
+  BLACKROCK = 'blackrock',
+  // Spec 1736 — Source Company Plugin: Autodesk
+  AUTODESK = 'autodesk',
+  // Spec 1736 — Source Company Plugin: Zillow
+  ZILLOW = 'zillow',
+  // Spec 1736 — Source Company Plugin: Expedia Group
+  EXPEDIA_GROUP = 'expediagroup',
+  // Spec 1736 — Source Company Plugin: 3M
+  THREE_M = '3m',
+  // Spec 1736 — Source Company Plugin: RTX
+  RTX = 'rtx',
+  // Spec 1736 — Source Company Plugin: Humana
+  HUMANA = 'humana',
+  // Spec 1736 — Source Company Plugin: CVS Health
+  CVS_HEALTH = 'cvshealth',
+  // Spec 1736 — Source Company Plugin: Chevron
+  CHEVRON = 'chevron',
+  // Spec 1736 — Source Company Plugin: Visa
+  VISA = 'visa',
+  // Spec 1736 — Source Company Plugin: GE Aerospace
+  GE_AEROSPACE = 'geaerospace',
+  // Spec 1736 — Source Company Plugin: Wells Fargo
+  WELLS_FARGO = 'wellsfargo',
+  // Spec 1736 — Source Company Plugin: Snap Inc.
+  SNAP = 'snap',
+  // Spec 1736 — Source Company Plugin: Morgan Stanley
+  MORGAN_STANLEY = 'morganstanley',
+  // Spec 1736 — Source Company Plugin: Copart
+  COPART = 'copart',
+  // Spec 1736 — Source Company Plugin: Cox Enterprises
+  COX_ENTERPRISES = 'coxenterprises',
+  // Spec 1736 — Source Company Plugin: Broadcom
+  BROADCOM = 'broadcom',
+  // Spec 1736 — Source Company Plugin: Pfizer
+  PFIZER = 'pfizer',
+  // Spec 1736 — Source Company Plugin: Marvell Technology
+  MARVELL = 'marvell',
+  // Spec 1736 — Source Company Plugin: General Motors
+  GENERAL_MOTORS = 'generalmotors',
+  // Spec 1736 — Source Company Plugin: Warner Bros. Discovery
+  WARNER_BROS_DISCOVERY = 'warnerbrosdiscovery',
+  // Spec 1736 — Source Company Plugin: Moderna
+  MODERNA = 'moderna',
+  // Spec 1737 — Source Company Plugin: Hudson River Trading
+  HUDSON_RIVER_TRADING = 'hudsonrivertrading',
+  // Spec 1737 — Source Company Plugin: Jump Trading
+  JUMP_TRADING = 'jumptrading',
+  // Spec 1737 — Source Company Plugin: Optiver
+  OPTIVER = 'optiver',
+  // Spec 1737 — Source Company Plugin: DRW
+  DRW = 'drw',
+  // Spec 1737 — Source Company Plugin: Akuna Capital
+  AKUNA_CAPITAL = 'akunacapital',
+  // Spec 1737 — Source Company Plugin: Five Rings
+  FIVE_RINGS = 'fiverings',
+  // Spec 1737 — Source Company Plugin: Old Mission
+  OLD_MISSION = 'oldmissioncapital',
+  // Spec 1737 — Source Company Plugin: XTX Markets
+  XTX_MARKETS = 'xtxmarkets',
+  // Spec 1737 — Source Company Plugin: Point72
+  POINT72 = 'point72',
+  // Spec 1737 — Source Company Plugin: Bridgewater Associates
+  BRIDGEWATER = 'bridgewater',
+  // Spec 1737 — Source Company Plugin: Radix Trading
+  RADIX_TRADING = 'radixtrading',
+  // Spec 1737 — Source Company Plugin: Headlands Technologies
+  HEADLANDS_TECH = 'headlandstech',
+  // Spec 1737 — Source Company Plugin: Belvedere Trading
+  BELVEDERE_TRADING = 'belvederetrading',
+  // Spec 1737 — Source Company Plugin: Chicago Trading Company
+  CHICAGO_TRADING = 'chicagotrading',
+  // Spec 1737 — Source Company Plugin: Flow Traders
+  FLOW_TRADERS = 'flowtraders',
+  // Spec 1737 — Source Company Plugin: Maven Securities
+  MAVEN_SECURITIES = 'mavensecurities',
+  // Spec 1737 — Source Company Plugin: Qube Research & Technologies
+  QUBE_RT = 'qube_rt',
+  // Spec 1737 — Source Company Plugin: G-Research
+  G_RESEARCH = 'gresearch',
+  // Spec 1737 — Source Company Plugin: Arrowstreet Capital
+  ARROWSTREET_CAPITAL = 'arrowstreetcapital',
+  // Spec 1737 — Source Company Plugin: The Voleon Group
+  VOLEON = 'voleon',
+  // Spec 1737 — Source Company Plugin: WorldQuant
+  WORLDQUANT = 'worldquant',
+  // Spec 1737 — Source Company Plugin: Schonfeld
+  SCHONFELD = 'schonfeld',
+  // Spec 1737 — Source Company Plugin: Geneva Trading
+  GENEVA_TRADING = 'genevatrading',
+  // Spec 1737 — Source Company Plugin: Vatic Labs
+  VATIC_LABS = 'vaticlabs',
+  // Spec 1737 — Source Company Plugin: Susquehanna International Group (SIG)
+  SIG = 'sig',
+  // Spec 1737 — Source Company Plugin: Tower Research Capital
+  TOWER_RESEARCH = 'towerresearchcapital',
+  // Spec 1737 — Source Company Plugin: IMC Trading
+  IMC = 'imc',
+  // Spec 1737 — Source Company Plugin: Jane Street
+  JANE_STREET = 'janestreet',
+  // Spec 1737 — Source Company Plugin: Squarepoint Capital
+  SQUAREPOINT = 'squarepoint',
+  // Spec 1737 — Source Company Plugin: Virtu Financial
+  VIRTU = 'virtu',
+  // Spec 1737 — Source Company Plugin: Graviton Research Capital
+  GRAVITON = 'gravitonresearchcapital',
 }
 
 /**
